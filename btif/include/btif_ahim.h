@@ -54,21 +54,23 @@ enum acm_evt{
 
 
 typedef void (* ahim_client_cb)(tA2DP_CTRL_CMD cmd);
-typedef uint16_t (* ahim_get_sample_rate_callback)();
-typedef uint8_t (* ahim_get_channel_mode_callback)();
-typedef uint32_t (* ahim_get_bitrate_callback)();
-typedef uint32_t (* ahim_get_mtu_callback)(uint32_t bit_rate);
-typedef uint16_t (* ahim_get_frame_length)();
+typedef uint16_t (* ahim_get_sample_rate_callback)(uint8_t direction);
+typedef uint8_t (* ahim_get_channel_mode_callback)(uint8_t direction);
+typedef uint32_t (* ahim_get_bitrate_callback)(uint8_t direction);
+typedef uint32_t (* ahim_get_mtu_callback)(uint32_t bit_rate, uint8_t direction);
+typedef uint16_t (* ahim_get_frame_length)(uint8_t direction);
 typedef uint8_t (* ahim_get_ch_count_callback)();
 typedef bool (* ahim_get_simulcast_status)();
 typedef uint16_t (* ahim_get_profile_status)();
-typedef bool (* ahim_is_codec_type_lc3q)();
-typedef uint8_t (* ahim_lc3q_ver)();
+typedef bool (* ahim_is_codec_type_lc3q)(uint8_t direction);
+typedef uint8_t (* ahim_lc3q_ver)(uint8_t direction);
+typedef uint8_t (* ahim_lc3_blocks_per_sdu)(uint8_t direction);
+typedef uint32_t (* ahim_get_audio_location)(uint32_t stream_id, uint8_t direction);
 
 typedef struct {
     uint8_t mode;
     ahim_client_cb client_cb;
-    ahim_get_sample_rate_callback  get_sample_rate_cb;
+    ahim_get_sample_rate_callback get_sample_rate_cb;
     ahim_get_channel_mode_callback get_channel_mode_cb;
     ahim_get_bitrate_callback get_bitrate_cb;
     ahim_get_mtu_callback get_mtu_cb;
@@ -78,6 +80,8 @@ typedef struct {
     ahim_get_profile_status get_profile_status_cb;
     ahim_is_codec_type_lc3q get_is_codec_type_lc3q;
     ahim_lc3q_ver get_lc3q_ver;
+    ahim_lc3_blocks_per_sdu get_lc3_blocks_per_sdu;
+    ahim_get_audio_location get_audio_location;
 }btif_ahim_client_callbacks_t;
 
 extern btif_ahim_client_callbacks_t* pclient_cbs[MAX_CLIENT];

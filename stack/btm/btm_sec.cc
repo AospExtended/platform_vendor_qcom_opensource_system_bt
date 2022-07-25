@@ -988,7 +988,8 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr,
   /* Finished if connection is active and already paired */
   if ((p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE) &&
        transport == BT_TRANSPORT_BR_EDR &&
-       (p_dev_rec->sec_flags & BTM_SEC_AUTHENTICATED)) {
+      (p_dev_rec->sec_flags & BTM_SEC_AUTHENTICATED) &&
+       (btm_get_bond_type_dev(bd_addr) == BOND_TYPE_PERSISTENT)) {
     BTM_TRACE_WARNING("BTM_SecBond -> Already Paired");
     return (BTM_SUCCESS);
   }
@@ -2937,6 +2938,8 @@ void btm_sec_dev_reset(void) {
     /* add mx service to use no security */
     BTM_SetSecurityLevel(false, "RFC_MUX", BTM_SEC_SERVICE_RFC_MUX,
                          BTM_SEC_NONE, BT_PSM_RFCOMM, BTM_SEC_PROTO_RFCOMM, 0);
+    BTM_SetSecurityLevel(true, "RFC_MUX", BTM_SEC_SERVICE_RFC_MUX, BTM_SEC_NONE,
+                         BT_PSM_RFCOMM, BTM_SEC_PROTO_RFCOMM, 0);
   } else {
     btm_cb.security_mode = BTM_SEC_MODE_SERVICE;
   }
@@ -5697,8 +5700,17 @@ tBTM_SEC_SERV_REC* btm_sec_find_first_serv(CONNECTION_TYPE conn_type,
   /* otherwise, just find the first record with the specified PSM */
   for (i = 0; i < BTM_SEC_MAX_SERVICE_RECORDS; i++, p_serv_rec++) {
     if ((p_serv_rec->security_flags & BTM_SEC_IN_USE) &&
-        (p_serv_rec->psm == psm))
-      return (p_serv_rec);
+        (p_serv_rec->psm == psm)) {
+      if (psm == BT_PSM_RFCOMM  && is_originator && !strncmp("RFC_MUX",
+          (char*)p_serv_rec->orig_service_name, BTM_SEC_SERVICE_NAME_LEN - 1)) {
+        return (p_serv_rec);
+      } else if (psm == BT_PSM_RFCOMM  && !is_originator && !strncmp("RFC_MUX",
+          (char*)p_serv_rec->term_service_name, BTM_SEC_SERVICE_NAME_LEN - 1)) {
+        return (p_serv_rec);
+      } if (psm != BT_PSM_RFCOMM) {
+        return (p_serv_rec);
+      }
+    }
   }
   return (NULL);
 }

@@ -108,6 +108,8 @@ std::condition_variable session_wait_cv;
 bool session_wait;
 RawAddress ba_addr({0xCE, 0xFA, 0xCE, 0xFA, 0xCE, 0xFA});
 
+extern std::mutex isDevUiReq_mutex_;
+
 #define BTIF_AV_ENABLE_MCAST_RESTRICTIONS FALSE
 /*****************************************************************************
  *  Constants & Macros
@@ -1620,9 +1622,15 @@ static bool btif_av_state_opening_handler(btif_sm_event_t event, void* p_data,
          peer_handle = btif_rc_get_connected_peer_handle(btif_av_cb[index].peer_bda);
 
        if (peer_handle != BTRC_HANDLE_NONE) {
-         BTIF_TRACE_WARNING("%s: RC connected to %s, disc RC too since AV is being aborted",
+         if (interop_match_addr_or_name(INTEROP_KEEP_RC_CONNECTED_AV_DISCONNECTED,
+             &(btif_av_cb[index].peer_bda))){
+              BTIF_TRACE_WARNING("%s: RC connected to %s, Don't disc RC although AV is aborted",
                  __func__, btif_av_cb[index].peer_bda.ToString().c_str());
-         BTA_AvCloseRc(peer_handle);
+          } else {
+              BTIF_TRACE_WARNING("%s: RC connected to %s, disc RC too since AV is being aborted",
+                __func__, btif_av_cb[index].peer_bda.ToString().c_str());
+              BTA_AvCloseRc(peer_handle);
+         }
        }
        BTA_AvClose(btif_av_cb[index].bta_handle);
        btif_queue_advance();
@@ -2862,11 +2870,26 @@ static bool btif_av_state_started_handler(btif_sm_event_t event, void* p_data,
 
     case BTA_AV_STOP_EVT:
       btif_av_cb[index].flags |= BTIF_AV_FLAG_PENDING_STOP;
-      BTIF_TRACE_DEBUG("%s: Stop the AV Data channel", __func__);
+      BTIF_TRACE_DEBUG("%s: Stop the AV Data channel for index: %d, "
+                       " current_playing: %d, peer_sep: %d",
+                       __func__, index, btif_av_cb[index].current_playing,
+                       btif_av_cb[index].peer_sep);
       if (is_multicast_supported && !btif_av_cb[index].current_playing) {
+        //Multicast case
         APPL_TRACE_WARNING("%s:Non active device disconnected,continue streaming",__func__);
       } else {
-        btif_a2dp_on_stopped(&p_av->suspend);
+        if (btif_av_cb[index].peer_sep == AVDT_TSEP_SRC) {
+          //When DUT is in Sink role
+          if (!btif_av_cb[index].current_playing) {
+            BTIF_TRACE_DEBUG("%s: Non active source device disconnected, "
+                                  "continue streaming with active source device",__func__);
+          } else {
+            btif_a2dp_on_stopped(&p_av->suspend);
+          }
+        } else {
+          //When DUT is in source role
+          btif_a2dp_on_stopped(&p_av->suspend);
+        }
       }
       btif_av_cb[index].is_device_playing = false;
 
@@ -4794,6 +4817,7 @@ static bt_status_t codec_config_src(const RawAddress& bd_addr,
   int index = btif_av_idx_by_bdaddr(const_cast<RawAddress*>(&bd_addr));
   btif_av_codec_config_req_t codec_req;
   bool saved_codec_cfg_change = codec_cfg_change;
+  std::unique_lock<std::mutex> guard(isDevUiReq_mutex_);
   isDevUiReq = false;
   codec_cfg_change = false;
   for (auto cp : codec_preferences) {

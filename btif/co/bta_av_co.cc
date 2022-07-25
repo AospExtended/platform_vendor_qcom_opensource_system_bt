@@ -90,6 +90,8 @@ btav_a2dp_codec_config_t saved_codec_user_config;
 std::string supported_codecs = "";
 static std::map<btav_a2dp_codec_index_t, btav_a2dp_codec_priority_t>
        codecs_priorities_;
+
+std::mutex isDevUiReq_mutex_;
 /*****************************************************************************
  **  Constants
  *****************************************************************************/
@@ -1617,20 +1619,6 @@ void bta_av_co_get_peer_params(tA2DP_ENCODER_INIT_PEER_PARAMS* p_peer_params) {
                                __func__, MAX_2MBPS_AVDTP_MTU);
       min_mtu = MAX_2MBPS_AVDTP_MTU;
     }
-    bool is_AAC_frame_ctrl_stack_enable = controller_get_interface()->supports_aac_frame_ctl();
-
-    APPL_TRACE_DEBUG("%s: Stack AAC frame control enabled: %d", __func__, is_AAC_frame_ctrl_stack_enable);
-    if (is_AAC_frame_ctrl_stack_enable && btif_av_is_peer_edr() &&
-                               (btif_av_peer_supports_3mbps() == FALSE)) {
-      // This condition would be satisfied only if the remote device is
-      // EDR and supports only 2 Mbps, but the effective AVDTP MTU size
-      // exceeds the 2DH5 packet size.
-      APPL_TRACE_DEBUG("%s The remote devce is EDR but does not support 3 Mbps", __func__);
-      if (min_mtu > MAX_2MBPS_AVDTP_MTU) {
-        min_mtu = MAX_2MBPS_AVDTP_MTU;
-        APPL_TRACE_WARNING("%s Restricting AVDTP MTU size to %d", __func__, min_mtu);
-      }
-    }
     APPL_TRACE_DEBUG("%s updating peer MTU to %d for index %d",
                                     __func__, min_mtu, index);
   }
@@ -1667,6 +1655,7 @@ bool bta_av_co_set_codec_user_config(
   bool config_updated = false;
   bool success = true;
   bool do_reconfig = false;
+  std::unique_lock<std::mutex> guard(isDevUiReq_mutex_);
   tBTA_AV_HNDL hndl = btif_av_get_reconfig_dev_hndl();
   // Find the peer that is currently open
   tBTA_AV_CO_PEER* p_peer = nullptr;
@@ -1716,7 +1705,6 @@ bool bta_av_co_set_codec_user_config(
         return success;
 
       switch(codec_user_config.codec_specific_4 & APTX_MODE_MASK) {
-        case APTX_ULL:
         case APTX_LL:
           APPL_TRACE_DEBUG("%s: Disabling BLE Scanning", __func__);
           btif_gatt_get_interface()->scanner->Scan(false);
